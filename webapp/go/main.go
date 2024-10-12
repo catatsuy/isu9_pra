@@ -327,6 +327,7 @@ func main() {
 	conf.Passwd = password
 	conf.DBName = dbname
 	conf.ParseTime = true
+	conf.InterpolateParams = true
 
 	if isDev {
 		proxy.RegisterTracer()
@@ -339,6 +340,30 @@ func main() {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}
 	defer dbx.Close()
+
+	maxConns := os.Getenv("DB_MAXOPENCONNS")
+	maxConnsInt := 25
+	if maxConns != "" {
+		maxConnsInt, err = strconv.Atoi(maxConns)
+		if err != nil {
+			panic(err)
+		}
+	}
+	dbx.SetMaxOpenConns(maxConnsInt)
+	dbx.SetMaxIdleConns(maxConnsInt * 2)
+	dbx.SetConnMaxLifetime(5 * time.Minute)
+	// db.SetConnMaxIdleTime(2 * time.Minute)
+
+	for {
+		err := dbx.Ping()
+		// _, err := db.Exec("SELECT 42")
+		if err == nil {
+			break
+		}
+		log.Print(err)
+		time.Sleep(time.Second * 2)
+	}
+	log.Print("DB ready!")
 
 	err = genCategoriesCache()
 	if err != nil {
