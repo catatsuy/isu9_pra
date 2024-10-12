@@ -274,9 +274,8 @@ func init() {
 	cs := &sessions.CookieStore{
 		Codecs: securecookie.CodecsFromPairs(keyPairs),
 		Options: &sessions.Options{
-			Path:     "/",
-			MaxAge:   86400 * 30,
-			SameSite: http.SameSiteNoneMode,
+			Path:   "/",
+			MaxAge: 86400 * 30,
 		},
 	}
 	cs.MaxAge(cs.Options.MaxAge)
