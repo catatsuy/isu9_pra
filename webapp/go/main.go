@@ -1030,7 +1030,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tx := dbx.MustBegin()
+	tx := dbx //dbx.MustBegin()
 	var items []Item
 	buyerItems := make([]Item, 0, TransactionsPerPage+1)
 	sellerItems := make([]Item, 0, TransactionsPerPage+1)
@@ -1052,7 +1052,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1072,7 +1072,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1092,7 +1092,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1109,7 +1109,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1136,7 +1136,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		category, err := getCategoryByID(tx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1165,7 +1165,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			buyer := userMap[item.BuyerID]
 			if err != nil {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-				tx.Rollback()
+				//tx.Rollback()
 				return
 			}
 			itemDetail.BuyerID = item.BuyerID
@@ -1178,7 +1178,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			// It's able to ignore ErrNoRows
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
+			//tx.Rollback()
 			return
 		}
 
@@ -1187,13 +1187,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
 			if err == sql.ErrNoRows {
 				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
+				//tx.Rollback()
 				return
 			}
 			if err != nil {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
+				//tx.Rollback()
 				return
 			}
 
@@ -1206,7 +1206,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Print(err)
 					outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-					tx.Rollback()
+					//tx.Rollback()
 					return
 				}
 
@@ -1220,7 +1220,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		itemDetails = append(itemDetails, itemDetail)
 	}
-	tx.Commit()
+	//tx.Commit()
 
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
