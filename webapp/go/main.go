@@ -1120,20 +1120,28 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		items = mergeItems(sellerItems, buyerItems, TransactionsPerPage+1)
 	}
 
+	userIDs := make([]int64, 0, len(items))
+	for _, item := range items {
+		userIDs = append(userIDs, item.SellerID)
+	}
+
+	userMap, err := getUserSimpleByIDs(dbx, userIDs)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
 	itemDetails := []ItemDetail{}
 	for _, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			tx.Rollback()
-			return
-		}
 		category, err := getCategoryByID(tx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
 			return
 		}
+
+		seller := userMap[item.SellerID]
 
 		itemDetail := ItemDetail{
 			ID:       item.ID,
