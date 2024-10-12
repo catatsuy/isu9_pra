@@ -1123,6 +1123,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	userIDs := make([]int64, 0, len(items))
 	for _, item := range items {
 		userIDs = append(userIDs, item.SellerID)
+		if item.BuyerID != 0 {
+			userIDs = append(userIDs, item.BuyerID)
+		}
 	}
 
 	userMap, err := getUserSimpleByIDs(dbx, userIDs)
@@ -1163,7 +1166,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
+			buyer := userMap[item.BuyerID]
 			if err != nil {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 				tx.Rollback()
