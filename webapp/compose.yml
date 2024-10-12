@@ -1,0 +1,60 @@
+name: isucari
+services:
+  nginx:
+    image: nginx:1.26
+    volumes:
+      - ./etc/nginx/conf.d:/etc/nginx/conf.d
+      - ./public:/public
+    ports:
+      - "80:80"
+    networks:
+      - my_network
+
+  app:
+    build:
+      context: .
+      # rubyを使うならruby/Dockerfile
+      dockerfile: go/Dockerfile
+    depends_on:
+      mysql:
+        condition: service_started
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASS: root
+      MYSQL_NAME: isucari
+    networks:
+      - my_network
+    volumes:
+      - ./public:/home/public
+      - ./sql:/home/sql
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      #- "TZ=Asia/Tokyo"
+      - "MYSQL_ROOT_HOST=%"
+      - "MYSQL_ROOT_PASSWORD=root"
+    volumes:
+      - mysql:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d
+      - ./etc/conf.d:/etc/mysql/conf.d
+    ports:
+      - "3306:3306"
+    networks:
+      - my_network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1g
+
+volumes:
+  mysql:
+
+networks:
+  my_network:
