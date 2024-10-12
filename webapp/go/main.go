@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	proxy "github.com/shogo82148/go-sql-proxy"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -64,6 +65,7 @@ var (
 	templates *template.Template
 	dbx       *sqlx.DB
 	store     sessions.Store
+	isDev     bool
 )
 
 type Config struct {
@@ -283,6 +285,10 @@ func init() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
+	if os.Getenv("DEV") == "1" {
+		isDev = true
+	}
+
 	templates = template.Must(template.ParseFiles(
 		"../public/index.html",
 	))
@@ -322,7 +328,13 @@ func main() {
 	conf.DBName = dbname
 	conf.ParseTime = true
 
-	dbx, err = sqlx.Open("mysql", conf.FormatDSN())
+	if isDev {
+		proxy.RegisterTracer()
+
+		dbx, err = sqlx.Open("mysql:trace", conf.FormatDSN())
+	} else {
+		dbx, err = sqlx.Open("mysql", conf.FormatDSN())
+	}
 	if err != nil {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}

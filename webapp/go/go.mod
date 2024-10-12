@@ -11,4 +11,7 @@ require (
 	golang.org/x/crypto v0.27.0
 )
 
-require filippo.io/edwards25519 v1.1.0 // indirect
+require (
+	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/shogo82148/go-sql-proxy v0.7.2 // indirect
+)
