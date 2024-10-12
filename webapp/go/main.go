@@ -340,6 +340,11 @@ func main() {
 	}
 	defer dbx.Close()
 
+	err = genCategoriesCache()
+	if err != nil {
+		log.Fatalf("failed to generate categories cache: %s", err.Error())
+	}
+
 	r := chi.NewRouter()
 
 	// API
@@ -432,7 +437,7 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 }
 
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
+	category = categoriesCacheID[categoryID]
 	if category.ParentID != 0 {
 		parentCategory, err := getCategoryByID(q, category.ParentID)
 		if err != nil {
@@ -476,6 +481,12 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 	templates.ExecuteTemplate(w, "index.html", struct{}{})
 }
 
+var (
+	categoriesCacheParentID map[int][]Category
+	categoriesCacheID       map[int]Category
+	categoriesAll           []Category
+)
+
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	ri := reqInitialize{}
 
@@ -515,6 +526,13 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = genCategoriesCache()
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
 		Campaign: 0,
@@ -524,6 +542,36 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+}
+
+func genCategoriesCache() error {
+	categoriesCacheParentID = make(map[int][]Category)
+	categoriesCacheID = make(map[int]Category)
+
+	categoriesAll = make([]Category, 0, 43)
+
+	err := dbx.Select(&categoriesAll, "SELECT * FROM `categories`")
+	if err != nil {
+		return err
+	}
+
+	categories := categoriesAll
+
+	for i := 0; i < len(categories); i++ {
+		categoriesCacheID[categories[i].ID] = categories[i]
+
+		if categories[i].ParentID == 0 {
+			continue
+		}
+
+		_, ok := categoriesCacheParentID[categories[i].ParentID]
+		if !ok {
+			categoriesCacheParentID[categories[i].ParentID] = []Category{}
+		}
+		categoriesCacheParentID[categories[i].ParentID] = append(categoriesCacheParentID[categories[i].ParentID], categories[i])
+	}
+
+	return nil
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
