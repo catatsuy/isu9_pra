@@ -84,9 +84,9 @@ type User struct {
 }
 
 type UserSimple struct {
-	ID           int64  `json:"id"`
-	AccountName  string `json:"account_name"`
-	NumSellItems int    `json:"num_sell_items"`
+	ID           int64  `json:"id" db:"id"`
+	AccountName  string `json:"account_name" db:"account_name"`
+	NumSellItems int    `json:"num_sell_items" db:"num_sell_items"`
 }
 
 type Item struct {
@@ -461,6 +461,26 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
+func getUserSimpleByIDs(q sqlx.Queryer, userIDs []int64) (userMap map[int64]UserSimple, err error) {
+	query, args, err := sqlx.In("SELECT `id`,`account_name`,`num_sell_items` FROM users WHERE `id` IN (?);", userIDs)
+	if err != nil {
+		return nil, err
+	}
+	users := make([]UserSimple, 0, len(userIDs))
+	err = sqlx.Select(q, &users, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	userMap = make(map[int64]UserSimple, len(users))
+
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
+	return userMap, err
+}
+
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	category = categoriesCacheID[categoryID]
 	if category.ParentID != 0 {
@@ -655,17 +675,26 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
+
+	userIDs := make([]int64, 0, len(items))
 	for _, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			return
-		}
+		userIDs = append(userIDs, item.SellerID)
+	}
+
+	userMap, err := getUserSimpleByIDs(dbx, userIDs)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	for _, item := range items {
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
+		seller, _ := userMap[item.SellerID]
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
