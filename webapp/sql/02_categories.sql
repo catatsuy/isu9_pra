@@ -1,5 +1,7 @@
 use `isucari`;
 
+SET long_query_time = 60.0;
+
 INSERT INTO categories (`id`,`parent_id`,`category_name`) VALUES
 (1,0,"ソファー"),
 (2,1,"一人掛けソファー"),
