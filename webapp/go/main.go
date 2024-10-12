@@ -481,12 +481,6 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 	templates.ExecuteTemplate(w, "index.html", struct{}{})
 }
 
-var (
-	categoriesCacheParentID map[int][]Category
-	categoriesCacheID       map[int]Category
-	categoriesAll           []Category
-)
-
 func postInitialize(w http.ResponseWriter, r *http.Request) {
 	ri := reqInitialize{}
 
@@ -544,8 +538,14 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+var (
+	categoriesCacheParentIDs map[int][]int
+	categoriesCacheID        map[int]Category
+	categoriesAll            []Category
+)
+
 func genCategoriesCache() error {
-	categoriesCacheParentID = make(map[int][]Category)
+	categoriesCacheParentIDs = make(map[int][]int)
 	categoriesCacheID = make(map[int]Category)
 
 	categoriesAll = make([]Category, 0, 43)
@@ -564,11 +564,11 @@ func genCategoriesCache() error {
 			continue
 		}
 
-		_, ok := categoriesCacheParentID[categories[i].ParentID]
+		_, ok := categoriesCacheParentIDs[categories[i].ParentID]
 		if !ok {
-			categoriesCacheParentID[categories[i].ParentID] = []Category{}
+			categoriesCacheParentIDs[categories[i].ParentID] = []int{}
 		}
-		categoriesCacheParentID[categories[i].ParentID] = append(categoriesCacheParentID[categories[i].ParentID], categories[i])
+		categoriesCacheParentIDs[categories[i].ParentID] = append(categoriesCacheParentIDs[categories[i].ParentID], categories[i].ID)
 	}
 
 	return nil
@@ -684,13 +684,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var categoryIDs []int
-	err = dbx.Select(&categoryIDs, "SELECT id FROM `categories` WHERE parent_id=?", rootCategory.ID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
+	categoryIDs := categoriesCacheParentIDs[rootCategory.ID]
 
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
