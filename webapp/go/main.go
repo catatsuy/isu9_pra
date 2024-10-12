@@ -965,8 +965,47 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(rui)
 }
 
-func getTransactions(w http.ResponseWriter, r *http.Request) {
+func mergeItems(sellerItems, buyerItems []Item, limit int) []Item {
+	merged := make([]Item, 0, len(sellerItems)+len(buyerItems))
+	i, j := 0, 0
 
+	for i < len(sellerItems) && j < len(buyerItems) {
+		if sellerItems[i].CreatedAt.After(buyerItems[j].CreatedAt) ||
+			(sellerItems[i].CreatedAt.Equal(buyerItems[j].CreatedAt) && sellerItems[i].ID > buyerItems[j].ID) {
+			merged = append(merged, sellerItems[i])
+			i++
+		} else {
+			merged = append(merged, buyerItems[j])
+			j++
+		}
+
+		// リミットに達したら終了
+		if len(merged) >= limit {
+			return merged[:limit]
+		}
+	}
+
+	// 残った要素を追加 (limitを考慮)
+	for i < len(sellerItems) && len(merged) < limit {
+		merged = append(merged, sellerItems[i])
+		i++
+	}
+	for j < len(buyerItems) && len(merged) < limit {
+		merged = append(merged, buyerItems[j])
+		j++
+	}
+
+	return merged[:min(len(merged), limit)]
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func getTransactions(w http.ResponseWriter, r *http.Request) {
 	user, errCode, errMsg := getUser(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
@@ -996,12 +1035,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	items := []Item{}
+	var items []Item
+	buyerItems := make([]Item, 0, TransactionsPerPage+1)
+	sellerItems := make([]Item, 0, TransactionsPerPage+1)
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
+		err := tx.Select(&sellerItems,
+			"SELECT * FROM `items` WHERE `seller_id` = ? AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			ItemStatusOnSale,
 			ItemStatusTrading,
@@ -1019,11 +1059,32 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			tx.Rollback()
 			return
 		}
+
+		err = tx.Select(&buyerItems,
+			"SELECT * FROM `items` WHERE `buyer_id` = ? AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			user.ID,
+			ItemStatusOnSale,
+			ItemStatusTrading,
+			ItemStatusSoldOut,
+			ItemStatusCancel,
+			ItemStatusStop,
+			time.Unix(createdAt, 0),
+			time.Unix(createdAt, 0),
+			itemID,
+			TransactionsPerPage+1,
+		)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
+		}
+
+		items = mergeItems(sellerItems, buyerItems, TransactionsPerPage+1)
 	} else {
 		// 1st page
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
+		err := tx.Select(&sellerItems,
+			"SELECT * FROM `items` WHERE `seller_id` = ? AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			ItemStatusOnSale,
 			ItemStatusTrading,
@@ -1038,6 +1099,25 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			tx.Rollback()
 			return
 		}
+
+		err = tx.Select(&buyerItems,
+			"SELECT * FROM `items` WHERE `buyer_id` = ? AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			user.ID,
+			ItemStatusOnSale,
+			ItemStatusTrading,
+			ItemStatusSoldOut,
+			ItemStatusCancel,
+			ItemStatusStop,
+			TransactionsPerPage+1,
+		)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
+		}
+
+		items = mergeItems(sellerItems, buyerItems, TransactionsPerPage+1)
 	}
 
 	itemDetails := []ItemDetail{}
