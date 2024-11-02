@@ -14,9 +14,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/catatsuy/cache"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/securecookie"
@@ -1486,39 +1486,7 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
-type LockManager struct {
-	mu    sync.Mutex
-	locks map[int64]*sync.Mutex
-}
-
-func NewLockManager() *LockManager {
-	return &LockManager{
-		locks: make(map[int64]*sync.Mutex),
-	}
-}
-
-func (lm *LockManager) getLock(id int64) *sync.Mutex {
-	lm.mu.Lock()
-	defer lm.mu.Unlock()
-
-	if lock, exists := lm.locks[id]; exists {
-		return lock
-	}
-
-	lock := &sync.Mutex{}
-	lm.locks[id] = lock
-	return lock
-}
-
-var lm = NewLockManager()
-
-func (lm *LockManager) Lock(id int64) {
-	lm.getLock(id).Lock()
-}
-
-func (lm *LockManager) Unlock(id int64) {
-	lm.getLock(id).Unlock()
-}
+var lm = cache.NewLockManager[int64]()
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
@@ -1541,8 +1509,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lm.Lock(rb.ItemID)
-	defer lm.Unlock(rb.ItemID)
+	defer lm.GetAndLock(rb.ItemID).Unlock()
 
 	targetItem := Item{}
 	err = dbx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
